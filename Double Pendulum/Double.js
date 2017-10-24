@@ -7,7 +7,7 @@ function init() {
         
     // the time interval in seconds for the differntial equation increments 
     fps = 1 / 60;
-    multip = 10;
+    multip = 50000;
     deltat = fps / multip;
     stepCounter = 0;
 
@@ -17,15 +17,15 @@ function init() {
     vDiff = new DiffVector();
 
     // the initial conditions for the first pendulum
-    l1 = 0.65;                // length of the first pendulum
+    l1 = 0.6;                // length of the first pendulum
     m1 = 1;                  // mass of the first pendulum
     t1 =  vDiff.t1;                  // angle of the first pendulum
     t1D = vDiff.t1D;                 // the first derivative to time is the angular velocity: t dot
     t1DD = vDiff.t1DD;               // the second derivative to time is the angular acceleration: t double dot.
 
     // the initial conditions for the second pendulum
-    l2 = 0.35;
-    m2 = 2;
+    l2 = 0.4;
+    m2 = 3;
     t2 = vDiff.t2;
     t2D = vDiff.t2D;
     t2DD = vDiff.t2DD;
@@ -67,44 +67,56 @@ function init() {
 function Draw() {
 
     err = 0
-    tol = 0.000000001;
+    tol = 0.00000000001;
     // calculate next iteration from previous variables
 
 
     v1 = new DiffVector();
     v0 = new DiffVector();
-    
+    vHalf = new DiffVector();
+    cumulDeltat = 0;
 
-    for (cumulDeltat = 0; cumulDeltat < 1/60; cumulDeltat += deltat) {
 
+    while (cumulDeltat < 1 / 60) {
+              
         v0.copy(vDiff);
         v1.copy(vDiff);
 
         iterateRungeKutta(v1, deltat);
         iterateRungeKutta(vDiff, deltat / 2);
+        vHalf.copy(vDiff);
         iterateRungeKutta(vDiff, deltat / 2);
         stepCounter += 3;
 
-        err = Math.sqrt((vDiff.t1 - v1.t1) * (vDiff.t1 - v1.t1) + (vDiff.t2 - v1.t2) * (vDiff.t2 - v1.t2) + (vDiff.t1D - v1.t1D) * (vDiff.t1D - v1.t1D) + (vDiff.t2D - v1.t2D) * (vDiff.t2D - v1.t2D));
+        err = Math.sqrt(Math.pow(vDiff.t1 - v1.t1, 2) + Math.pow(vDiff.t2 - v1.t2, 2) + Math.pow(vDiff.t1D - v1.t1D, 2) + Math.pow(vDiff.t2D - v1.t2D,2));
+
 
         while (err > tol) {
 
             vDiff.copy(v0);
             v1.copy(v0);
 
-            deltat = 0.9 * deltat * Math.pow(tol / err, 1 / 4)
+            deltat = 0.5 * deltat * Math.pow(tol / err, 1 / 4)
 
             iterateRungeKutta(v1, deltat);
             iterateRungeKutta(vDiff, deltat / 2);
             iterateRungeKutta(vDiff, deltat / 2);
             stepCounter += 3;
 
-            err = Math.sqrt((vDiff.t1 - v1.t1) * (vDiff.t1 - v1.t1) + (vDiff.t2 - v1.t2) * (vDiff.t2 - v1.t2) + (vDiff.t1D - v1.t1D) * (vDiff.t1D - v1.t1D) + (vDiff.t2D - v1.t2D) * (vDiff.t2D - v1.t2D));
+            err = Math.sqrt(Math.pow(vDiff.t1 - v1.t1, 2) + Math.pow(vDiff.t2 - v1.t2, 2) + Math.pow(vDiff.t1D - v1.t1D, 2) + Math.pow(vDiff.t2D - v1.t2D, 2));
 
         }
 
-        deltat = 0.9 * deltat * Math.pow(tol / err, 1 / 5)        
+        cumulDeltat += deltat;
+        deltat = 0.9 * deltat * Math.pow(tol / err, 1 / 5)
+
+        //if (deltat > 1 / 60) {
+        //    deltat = 1 / 60
+        //}
+        
     }
+
+
 
     // do the below only once every frame. No need to iterate between frames. Start by clearing the old picture
     ctx.clearRect(0, 0, canv.width, canv.height);
@@ -117,7 +129,7 @@ function Draw() {
     enString = (enLossPercent.toFixed(8));
     stepString = stepCounter.toString();
     ctx.font = "30px Arial";
-    ctx.fillText("Energy loss: " + enString +"%   " +stepString, 10, 50);
+    ctx.fillText("Energy loss: " + enString + "%   " + stepString, 10, 50);
 
     //Convert the new polar coordinates in cartesian coordinates
     ball1.X = l1 * Math.sin(vDiff.t1);
@@ -125,22 +137,22 @@ function Draw() {
 
     ball2.X = l2 * Math.sin(vDiff.t2) + ball1.X;
     ball2.Y = -l2 * Math.cos(vDiff.t2) + ball1.Y;
-        
-  // Draw the balls
-    ball0.Join(ball1);    
+
+    // Draw the balls
+    ball0.Join(ball1);
     ball1.Join(ball2);
     ball0.Draw();
     ball1.Draw();
     ball2.Draw();
 
     re = requestAnimationFrame(Draw);
-    
+
 }
 
 function DiffVector() {
     // The differential vector
     this.t1 = 2*Math.PI / 2;
-    this.t2 = 2 * Math.PI / 3;
+    this.t2 = 2*Math.PI / 3;
     this.t1D = 0;
     this.t2D = 0;
 }
