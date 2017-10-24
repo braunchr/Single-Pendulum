@@ -7,25 +7,28 @@ function init() {
         
     // the time interval in seconds for the differntial equation increments 
     fps = 1 / 60;
-    multip = 50000;
+    multip = 10;
     deltat = fps / multip;
+    stepCounter = 0;
 
     // gravitational constant
-    g = 9.81;
+    g = 9.8;
+
+    vDiff = new DiffVector();
 
     // the initial conditions for the first pendulum
-    l1 = 0.6;                   // length of the first pendulum
-    m1 = 1;                     // mass of the first pendulum
-    t1 = 3*Math.PI/4 ;      // angle of the first pendulum
-    t1D = 0;                // the first derivative to time is the angular velocity: t dot
-    t1DD = 0;               // the second derivative to time is the angular acceleration: t double dot.
+    l1 = 0.65;                // length of the first pendulum
+    m1 = 1;                  // mass of the first pendulum
+    t1 =  vDiff.t1;                  // angle of the first pendulum
+    t1D = vDiff.t1D;                 // the first derivative to time is the angular velocity: t dot
+    t1DD = vDiff.t1DD;               // the second derivative to time is the angular acceleration: t double dot.
 
     // the initial conditions for the second pendulum
-    l2 = 0.4;
-    m2 = 3;
-    t2 = 3*Math.PI / 4;
-    t2D = 0;
-    t2DD = 0;
+    l2 = 0.35;
+    m2 = 2;
+    t2 = vDiff.t2;
+    t2D = vDiff.t2D;
+    t2DD = vDiff.t2DD;
         
     ax = new Axis(canv, ctx);
 
@@ -63,55 +66,65 @@ function init() {
 // Functionto be called by animation timer.
 function Draw() {
 
-    //The differential equation goes here we have a set of 2 equations of 2 unknown x=t2DD and y=t1DD
-    // The form of these 2 equations is ax + by + c = 0 and mx + ny+ k = 0 
+    err = 0
+    tol = 0.000000001;
+    // calculate next iteration from previous variables
 
 
-    // iterate a number of time before displaying the next frame (every 1/60 of a second)
+    v1 = new DiffVector();
+    v0 = new DiffVector();
+    
 
-    for (i = 0; i < multip; i++){
-        a = l2;
-        b = l1 * Math.cos(t1 - t2);
-        c = -l1 * t1D * t1D * Math.sin(t1 - t2) + g * Math.sin(t2);
+    for (cumulDeltat = 0; cumulDeltat < 1/60; cumulDeltat += deltat) {
 
-        m = m2 * l2 * Math.cos(t1 - t2);
-        n = (m1 + m2) * l1;
-        k = g * (m1 + m2) * Math.sin(t1) + m2 * l2 * t2D * t2D * Math.sin(t1 - t2);
+        v0.copy(vDiff);
+        v1.copy(vDiff);
 
-        den = b * m - a * n;
+        iterateRungeKutta(v1, deltat);
+        iterateRungeKutta(vDiff, deltat / 2);
+        iterateRungeKutta(vDiff, deltat / 2);
+        stepCounter += 3;
 
-        t2DD = (n * c - b * k) / den;
-        t1DD = (a * k - m * c) / den;
+        err = Math.sqrt((vDiff.t1 - v1.t1) * (vDiff.t1 - v1.t1) + (vDiff.t2 - v1.t2) * (vDiff.t2 - v1.t2) + (vDiff.t1D - v1.t1D) * (vDiff.t1D - v1.t1D) + (vDiff.t2D - v1.t2D) * (vDiff.t2D - v1.t2D));
 
+        while (err > tol) {
 
-        //These are the definitions of the derivatives iterations
-        t1D = (t1D + t1DD * deltat);
-        t1 = (t1 + t1D * deltat);
+            vDiff.copy(v0);
+            v1.copy(v0);
 
-        t2D = (t2D + t2DD * deltat);
-        t2 = (t2 + t2D * deltat);
+            deltat = 0.9 * deltat * Math.pow(tol / err, 1 / 4)
+
+            iterateRungeKutta(v1, deltat);
+            iterateRungeKutta(vDiff, deltat / 2);
+            iterateRungeKutta(vDiff, deltat / 2);
+            stepCounter += 3;
+
+            err = Math.sqrt((vDiff.t1 - v1.t1) * (vDiff.t1 - v1.t1) + (vDiff.t2 - v1.t2) * (vDiff.t2 - v1.t2) + (vDiff.t1D - v1.t1D) * (vDiff.t1D - v1.t1D) + (vDiff.t2D - v1.t2D) * (vDiff.t2D - v1.t2D));
+
+        }
+
+        deltat = 0.9 * deltat * Math.pow(tol / err, 1 / 5)        
     }
-
-
 
     // do the below only once every frame. No need to iterate between frames. Start by clearing the old picture
     ctx.clearRect(0, 0, canv.width, canv.height);
 
     // Calculate and display the total energy
-    enPotential = -g * l1 * (m1 + m2) * Math.cos(t1) - g * m2 * l2 * Math.cos(t2);
-    enKinetic = m1 / 2 * l1 * l1 * t1D * t1D + m2 / 2 * (l1 * l1 * t1D * t1D + l2 * l2 * t2D * t2D + 2 * l1 * l2 * t1D * t2D * Math.cos(t1 - t2));
+    enPotential = -g * l1 * (m1 + m2) * Math.cos(vDiff.t1) - g * m2 * l2 * Math.cos(vDiff.t2);
+    enKinetic = m1 / 2 * l1 * l1 * vDiff.t1D * vDiff.t1D + m2 / 2 * (l1 * l1 * vDiff.t1D * vDiff.t1D + l2 * l2 * vDiff.t2D * vDiff.t2D + 2 * l1 * l2 * vDiff.t1D * vDiff.t2D * Math.cos(vDiff.t1 - vDiff.t2));
     enLossPercent = (enInitial - enPotential - enKinetic) / enInitial * 100;
 
-    enString = (enLossPercent.toFixed(2));
+    enString = (enLossPercent.toFixed(8));
+    stepString = stepCounter.toString();
     ctx.font = "30px Arial";
-    ctx.fillText("Energy loss: " + enString +"%", 10, 50);
+    ctx.fillText("Energy loss: " + enString +"%   " +stepString, 10, 50);
 
     //Convert the new polar coordinates in cartesian coordinates
-    ball1.X = l1 * Math.sin(t1);
-    ball1.Y = -l1 * Math.cos(t1);
+    ball1.X = l1 * Math.sin(vDiff.t1);
+    ball1.Y = -l1 * Math.cos(vDiff.t1);
 
-    ball2.X = l2 * Math.sin(t2) + ball1.X;
-    ball2.Y = -l2 * Math.cos(t2) + ball1.Y;
+    ball2.X = l2 * Math.sin(vDiff.t2) + ball1.X;
+    ball2.Y = -l2 * Math.cos(vDiff.t2) + ball1.Y;
         
   // Draw the balls
     ball0.Join(ball1);    
@@ -121,6 +134,23 @@ function Draw() {
     ball2.Draw();
 
     re = requestAnimationFrame(Draw);
+    
+}
+
+function DiffVector() {
+    // The differential vector
+    this.t1 = 2*Math.PI / 2;
+    this.t2 = 2 * Math.PI / 3;
+    this.t1D = 0;
+    this.t2D = 0;
+}
+
+DiffVector.prototype.copy = function(source){
+    
+    this.t1 = source.t1;
+    this.t2 = source.t2;
+    this.t1D = source.t1D;
+    this.t2D = source.t2D;
     
 }
 
@@ -139,6 +169,7 @@ function Ball() {
    
 
 }
+
 
 Ball.prototype.Draw = function () {
     ctx.beginPath();
@@ -188,3 +219,116 @@ Axis.prototype.ConvX = function (X) {
 Axis.prototype.ConvY = function (Y) {
     return (-Y * this.canv.height / (this.YMax - this.YMin) + this.canv.height * this.YMax / (this.YMax - this.YMin));
 }
+
+function iterateEuler(vDiff, step) {
+
+    y1 = vDiff.t1;
+    y2 = vDiff.t2;
+    y3 = vDiff.t1D;
+    y4 = vDiff.t2D;
+  
+    //The differential equation goes here we have a set of 2 equations of 2 unknown x=t2DD and y=t1DD
+    // The form of these 2 equations is ax + by + c = 0 and mx + ny+ k = 0 
+    // the solution of this is simply x=(nc-bk)/(bm-an) and y=(ak-mc)/(bm-an)
+    // values abc and mnk come from the Euler Lagrange equations. 
+
+        a1 = f1(y1, y2, y3, y4);
+        a2 = f2(y1, y2, y3, y4);
+        a3 = f3(y1, y2, y3, y4);
+        a4 = f4(y1, y2, y3, y4);
+                       
+        y3 = y3 + a3 * step;
+        y1 = y1 + a1 * step;
+        y2 = y2 + a2 * step;
+        y4 = y4 + a4 * step;
+        
+    vDiff.t1 = y1;
+    vDiff.t2 = y2;
+    vDiff.t1D = y3;
+    vDiff.t2D = y4;
+ 
+
+}
+
+
+function iterateRungeKutta(vDiff, step) {
+
+    y1 = vDiff.t1;
+    y2 = vDiff.t2;
+    y3 = vDiff.t1D;
+    y4 = vDiff.t2D;
+    
+        a1 = f1(y1, y2, y3, y4);
+        a2 = f2(y1, y2, y3, y4);
+        a3 = f3(y1, y2, y3, y4);
+        a4 = f4(y1, y2, y3, y4);
+
+        b1 = f1(y1 + step / 2 * a1, y2 + step / 2 * a2, y3 + step / 2 * a3, y4 + step / 2 * a4);
+        b2 = f2(y1 + step / 2 * a1, y2 + step / 2 * a2, y3 + step / 2 * a3, y4 + step / 2 * a4);
+        b3 = f3(y1 + step / 2 * a1, y2 + step / 2 * a2, y3 + step / 2 * a3, y4 + step / 2 * a4);
+        b4 = f4(y1 + step / 2 * a1, y2 + step / 2 * a2, y3 + step / 2 * a3, y4 + step / 2 * a4);
+
+        c1 = f1(y1 + step / 2 * b1, y2 + step / 2 * b2, y3 + step / 2 * b3, y4 + step / 2 * b4);
+        c2 = f2(y1 + step / 2 * b1, y2 + step / 2 * b2, y3 + step / 2 * b3, y4 + step / 2 * b4);
+        c3 = f3(y1 + step / 2 * b1, y2 + step / 2 * b2, y3 + step / 2 * b3, y4 + step / 2 * b4);
+        c4 = f4(y1 + step / 2 * b1, y2 + step / 2 * b2, y3 + step / 2 * b3, y4 + step / 2 * b4);
+
+        d1 = f1(y1 + step * c1, y2 + step * c2, y3 + step * c3, y4 + step * c4);
+        d2 = f2(y1 + step * c1, y2 + step * c2, y3 + step * c3, y4 + step * c4);
+        d3 = f3(y1 + step * c1, y2 + step * c2, y3 + step * c3, y4 + step * c4);
+        d4 = f4(y1 + step * c1, y2 + step * c2, y3 + step * c3, y4 + step * c4);
+
+        y1 = y1 + step / 6 * (a1 + 2 * b1 + 2 * c1 + d1);
+        y2 = y2 + step / 6 * (a2 + 2 * b2 + 2 * c2 + d2);
+        y3 = y3 + step / 6 * (a3 + 2 * b3 + 2 * c3 + d3);
+        y4 = y4 + step / 6 * (a4 + 2 * b4 + 2 * c4 + d4);
+        
+
+    vDiff.t1 = y1;
+    vDiff.t2 = y2;
+    vDiff.t1D = y3;
+    vDiff.t2D = y4;
+    
+}
+
+
+function f1(y1, y2, y3, y4) {
+    return (y3);
+}
+
+function f2(y1, y2, y3, y4) {
+    return (y4);
+}
+
+function f3(y1, y2, y3, y4) {
+    a = l2;
+    b = l1 * Math.cos(y1 - y2);
+    c = -l1 * y3 * y3 * Math.sin(y1 - y2) + g * Math.sin(y2);
+
+    m = m2 * l2 * Math.cos(y1 - y2);
+    n = (m1 + m2) * l1;
+    k = g * (m1 + m2) * Math.sin(y1) + m2 * l2 * y4 * y4 * Math.sin(y1 - y2);
+
+    den = b * m - a * n;
+
+    t1DD = (a * k - m * c) / den;
+
+    return (t1DD);
+}
+function f4(y1, y2, y3, y4) {
+    a = l2;
+    b = l1 * Math.cos(y1 - y2);
+    c = -l1 * y3 * y3 * Math.sin(y1 - y2) + g * Math.sin(y2);
+
+    m = m2 * l2 * Math.cos(y1 - y2);
+    n = (m1 + m2) * l1;
+    k = g * (m1 + m2) * Math.sin(y1) + m2 * l2 * y4 * y4 * Math.sin(y1 - y2);
+
+    den = b * m - a * n;
+
+    t2DD = (n * c - b * k) / den;
+
+    return (t2DD);
+}
+
+
